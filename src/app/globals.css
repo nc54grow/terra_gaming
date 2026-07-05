@@ -1,26 +1,152 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  /* Custom colors */
+  --color-background: hsl(222 47% 6%);
+  --color-foreground: hsl(210 40% 96%);
+  --color-card: hsl(222 44% 9%);
+  --color-card-foreground: hsl(210 40% 96%);
+  --color-popover: hsl(222 44% 9%);
+  --color-popover-foreground: hsl(210 40% 96%);
+  --color-primary: hsl(199 89% 52%);
+  --color-primary-foreground: hsl(0 0% 100%);
+  --color-secondary: hsl(222 30% 16%);
+  --color-secondary-foreground: hsl(210 40% 96%);
+  --color-muted: hsl(222 30% 14%);
+  --color-muted-foreground: hsl(215 20% 65%);
+  --color-accent: hsl(199 89% 42%);
+  --color-accent-foreground: hsl(0 0% 100%);
+  --color-destructive: hsl(0 72% 51%);
+  --color-destructive-foreground: hsl(0 0% 98%);
+  --color-success: hsl(142 71% 45%);
+  --color-success-foreground: hsl(0 0% 100%);
+  --color-warning: hsl(38 92% 50%);
+  --color-warning-foreground: hsl(0 0% 100%);
+  --color-border: hsl(222 30% 18%);
+  --color-input: hsl(222 30% 18%);
+  --color-ring: hsl(199 89% 52%);
+
+  /* Chart colors */
+  --color-chart-1: hsl(199 89% 52%);
+  --color-chart-2: hsl(142 71% 45%);
+  --color-chart-3: hsl(38 92% 50%);
+  --color-chart-4: hsl(280 65% 65%);
+  --color-chart-5: hsl(340 75% 55%);
+
+  /* Border radius */
+  --radius: 0.75rem;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+/* Base styles */
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-feature-settings:
+      "rlig" 1,
+      "calt" 1;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Utility classes */
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, hsl(222 30% 18% / 0.4) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(222 30% 18% / 0.4) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
+  .bg-glow {
+    background: radial-gradient(
+      ellipse 80% 50% at 50% -20%,
+      hsl(199 89% 52% / 0.15),
+      transparent
+    );
+  }
+
+  .glow-primary {
+    box-shadow: 0 0 24px hsl(199 89% 52% / 0.35);
+  }
+
+  .glow-text {
+    text-shadow: 0 0 20px hsl(199 89% 52% / 0.5);
+  }
+}
+
+/* Keyframes */
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Animation utilities */
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 3s ease-in-out infinite;
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    hsl(222 30% 14%) 0%,
+    hsl(222 30% 14% / 0.5) 50%,
+    hsl(222 30% 14%) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}
+
+/* Scrollbar styles */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(222 47% 6%);
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(222 30% 14%);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(215 20% 65% / 0.5);
 }
