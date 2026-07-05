@@ -6,7 +6,6 @@ import {
   useEffect,
   useState,
   useCallback,
-  useRef,
 } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase-client";
@@ -28,71 +27,34 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-// FIXED: Sequential queries - stop at first match
-async function resolveRole(userId: string): Promise<{
+async function resolveRole(
+  userId: string,
+): Promise<{
   role: UserRole;
   profile: UserProfile | OrganizationProfile | AdminProfile | null;
 }> {
-  console.log("Resolving role for user:", userId);
+  const [userRes, orgRes, adminRes] = await Promise.all([
+    supabase.from("tg_users").select("*").eq("id", userId).maybeSingle(),
+    supabase
+      .from("tg_organizations")
+      .select("*")
+      .eq("id", userId)
+      .maybeSingle(),
+    supabase.from("tg_admins").select("*").eq("id", userId).maybeSingle(),
+  ]);
 
-  // Check admin first (most privileged)
-  console.log("Checking tg_admins...");
-  const { data: adminData, error: adminError } = await supabase
-    .from("tg_admins")
-    .select("*")
-    .eq("id", userId)
-    .maybeSingle();
-
-  console.log(
-    "Admin query result:",
-    adminData ? "Found" : "Not found",
-    adminError?.message || "No error",
-  );
-
-  if (adminData) {
-    console.log("✅ User is ADMIN");
-    return { role: "admin", profile: adminData as AdminProfile };
+  if (adminRes.data) {
+    return { role: "admin", profile: adminRes.data as AdminProfile };
   }
-
-  // Check organization
-  console.log("Checking tg_organizations...");
-  const { data: orgData, error: orgError } = await supabase
-    .from("tg_organizations")
-    .select("*")
-    .eq("id", userId)
-    .maybeSingle();
-
-  console.log(
-    "Organization query result:",
-    orgData ? "Found" : "Not found",
-    orgError?.message || "No error",
-  );
-
-  if (orgData) {
-    console.log("✅ User is ORGANIZATION");
-    return { role: "organization", profile: orgData as OrganizationProfile };
+  if (orgRes.data) {
+    return {
+      role: "organization",
+      profile: orgRes.data as OrganizationProfile,
+    };
   }
-
-  // Check regular user
-  console.log("Checking tg_users...");
-  const { data: userData, error: userError } = await supabase
-    .from("tg_users")
-    .select("*")
-    .eq("id", userId)
-    .maybeSingle();
-
-  console.log(
-    "User query result:",
-    userData ? "Found" : "Not found",
-    userError?.message || "No error",
-  );
-
-  if (userData) {
-    console.log("✅ User is REGULAR USER");
-    return { role: "user", profile: userData as UserProfile };
+  if (userRes.data) {
+    return { role: "user", profile: userRes.data as UserProfile };
   }
-
-  console.log("❌ No role found for user");
   return { role: null, profile: null };
 }
 
@@ -106,81 +68,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshRole = useCallback(async () => {
     if (!user) return;
-    setLoading(true);
-    try {
-      const { role: resolvedRole, profile: resolvedProfile } =
-        await resolveRole(user.id);
-      setRole(resolvedRole);
-      setProfile(resolvedProfile);
-    } catch (error) {
-      console.error("Refresh role error:", error);
-    } finally {
-      setLoading(false);
-    }
+    const { role: resolvedRole, profile: resolvedProfile } = await resolveRole(
+      user.id,
+    );
+    setRole(resolvedRole);
+    setProfile(resolvedProfile);
   }, [user]);
 
   useEffect(() => {
     let mounted = true;
 
-    const initializeAuth = async () => {
-      console.log("Initializing auth...");
-
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        console.log("Session:", session ? "Found" : "Not found");
-
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }: { data: { session: Session | null } }) => {
+        if (!mounted) return;
         if (session?.user) {
           setUser(session.user);
-          console.log("User found:", session.user.id);
-
-          const { role: r, profile: p } = await resolveRole(session.user.id);
-
-          if (!mounted) return;
-
-          console.log("Setting role:", r);
-          setRole(r);
-          setProfile(p);
+          resolveRole(session.user.id).then(({ role: r, profile: p }) => {
+            if (!mounted) return;
+            setRole(r);
+            setProfile(p);
+            setLoading(false);
+          });
         } else {
-          console.log("No session found");
-        }
-      } catch (error) {
-        console.error("Auth initialization error:", error);
-      } finally {
-        if (mounted) {
-          console.log("Setting loading to false");
           setLoading(false);
         }
-      }
-    };
-
-    initializeAuth();
+      });
 
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log("Auth state changed:", event);
-        if (!mounted) return;
-
-        if (session?.user) {
-          setUser(session.user);
-          setLoading(true);
-          try {
+      (_event, session) => {
+        (async () => {
+          if (!mounted) return;
+          if (session?.user) {
+            setUser(session.user);
             const { role: r, profile: p } = await resolveRole(session.user.id);
             if (!mounted) return;
             setRole(r);
             setProfile(p);
-          } catch (error) {
-            console.error("Role resolution error:", error);
-          } finally {
-            if (mounted) setLoading(false);
+            setLoading(false);
+          } else {
+            setUser(null);
+            setRole(null);
+            setProfile(null);
+            setLoading(false);
           }
-        } else {
-          setUser(null);
-          setRole(null);
-          setProfile(null);
-          setLoading(false);
-        }
+        })();
       },
     );
 
