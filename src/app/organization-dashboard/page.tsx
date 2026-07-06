@@ -7,11 +7,23 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { AlertCircle, ArrowRight } from "lucide-react";
+import {
+  CircleAlert as AlertCircle,
+  ArrowRight,
+  Trophy,
+  Plus,
+  Calendar,
+  Users,
+  IndianRupee,
+} from "lucide-react";
 import { TransitionLink } from "@/components/TransitionLink";
+import { useEffect, useState } from "react";
+import { listTournaments, type Tournament } from "@/lib/tournament-api";
 
 function OrgDashboardContent() {
   const { profile } = useAuth();
+  const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  const [loadingTournaments, setLoadingTournaments] = useState(true);
 
   const orgProfile = profile as {
     name?: string;
@@ -23,6 +35,17 @@ function OrgDashboardContent() {
   } | null;
 
   const isDisabled = orgProfile?.status === "disabled";
+
+  useEffect(() => {
+    let mounted = true;
+    listTournaments()
+      .then((data) => mounted && setTournaments(data))
+      .catch(() => mounted && setTournaments([]))
+      .finally(() => mounted && setLoadingTournaments(false));
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const initials =
     (orgProfile?.name || "O")
@@ -96,6 +119,94 @@ function OrgDashboardContent() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Tournaments section */}
+      <div className="mb-6 flex items-center justify-between">
+        <h2 className="flex items-center gap-2 text-lg font-semibold">
+          <Trophy className="h-5 w-5 text-warning" />
+          Your Tournaments
+        </h2>
+        <TransitionLink href="/organization-dashboard/tournaments/new">
+          <Button className="glow-primary">
+            <Plus className="mr-1.5 h-4 w-4" />
+            Host Tournament
+          </Button>
+        </TransitionLink>
+      </div>
+
+      {loadingTournaments ? (
+        <Card className="border-border/60 bg-card/50">
+          <CardContent className="flex items-center justify-center py-12">
+            <p className="text-sm text-muted-foreground">
+              Loading tournaments...
+            </p>
+          </CardContent>
+        </Card>
+      ) : tournaments.length === 0 ? (
+        <Card className="border-border/60 bg-card/50">
+          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+            <Trophy className="mb-3 h-10 w-10 text-muted-foreground/50" />
+            <p className="text-sm font-medium">No tournaments yet</p>
+            <p className="text-xs text-muted-foreground mb-4">
+              Host your first tournament to get started.
+            </p>
+            <TransitionLink href="/organization-dashboard/tournaments/new">
+              <Button className="glow-primary">
+                <Plus className="mr-1.5 h-4 w-4" />
+                Host Tournament
+              </Button>
+            </TransitionLink>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {tournaments.map((t) => (
+            <Card
+              key={t.id}
+              className="border-border/60 bg-card/50 transition-colors hover:border-warning/40"
+            >
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">{t.name}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {t.total_rounds} rounds · {t.total_slots} slots
+                    </p>
+                  </div>
+                  <Badge
+                    variant="secondary"
+                    className={
+                      t.status === "published"
+                        ? "bg-success/15 text-success"
+                        : t.status === "ongoing"
+                          ? "bg-primary/15 text-primary"
+                          : t.status === "completed"
+                            ? "bg-muted text-muted-foreground"
+                            : "bg-warning/15 text-warning"
+                    }
+                  >
+                    {t.status}
+                  </Badge>
+                </div>
+                <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <IndianRupee className="h-3.5 w-3.5" />
+                    {Number(t.prize_pool).toLocaleString("en-IN")}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Users className="h-3.5 w-3.5" />
+                    {t.total_slots}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Calendar className="h-3.5 w-3.5" />
+                    {new Date(t.registration_start).toLocaleDateString()}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </DashboardShell>
   );
 }
