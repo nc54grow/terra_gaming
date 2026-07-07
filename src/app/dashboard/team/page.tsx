@@ -135,25 +135,51 @@ export default function TeamPage() {
     }
   }, []);
 
-  const fetchSentInvitations = useCallback(async () => {
-    if (!team?.id || myRole !== "owner") {
-      setSentInvitations([]);
-      return;
-    }
-    try {
-      const invites = await getSentInvitations(team.id);
-      setSentInvitations(invites);
-    } catch (error) {
-      console.error("Error fetching sent invitations:", error);
-    }
-  }, [team?.id, myRole]);
+  const fetchSentInvitations = useCallback(
+    async (teamId?: string, role?: string | null) => {
+      const effectiveTeamId = teamId || team?.id;
+      const effectiveRole = role !== undefined ? role : myRole;
+      if (!effectiveTeamId || effectiveRole !== "owner") {
+        setSentInvitations([]);
+        return;
+      }
+      try {
+        const invites = await getSentInvitations(effectiveTeamId);
+        setSentInvitations(invites);
+      } catch (error) {
+        console.error("Error fetching sent invitations:", error);
+      }
+    },
+    [team?.id, myRole],
+  );
 
   const refreshData = useCallback(async () => {
-    await fetchContext();
-    await fetchPendingInvitation();
-    await fetchSentInvitations();
+    try {
+      setLoading(true);
+      const ctx = await getMyTeamContext();
+      setTeam(ctx.team);
+      setMembers(ctx.members);
+      setPendingRequests(ctx.pendingRequests);
+      setMyRole(ctx.myRole);
+      setMyPlayerCode(ctx.myPlayerCode);
+      setJoinRequest(ctx.myJoinRequest);
+
+      const invites = await getPendingInvitations();
+      setPendingInvitation(invites.length > 0 ? invites[0] : null);
+
+      if (ctx.team?.id && ctx.myRole === "owner") {
+        const sent = await getSentInvitations(ctx.team.id);
+        setSentInvitations(sent);
+      } else {
+        setSentInvitations([]);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to load team");
+    } finally {
+      setLoading(false);
+    }
     setRefreshKey((prev) => prev + 1);
-  }, [fetchContext, fetchPendingInvitation, fetchSentInvitations]);
+  }, []);
 
   // Single useEffect for initial data fetching
   useEffect(() => {

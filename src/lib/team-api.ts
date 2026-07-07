@@ -195,74 +195,42 @@ export async function approveJoinRequest(userId: string): Promise<void> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");
-  // Get owner info
+
   const { data: owner, error: ownerError } = await supabase
     .from("tg_users")
     .select("team_id, team_role")
     .eq("id", user.id)
     .maybeSingle();
-  
+
+  if (ownerError) throw ownerError;
   if (!owner?.team_id || owner.team_role !== "owner") {
     throw new Error("Only team owners can approve requests");
   }
-  // Get requester info BEFORE update
-  const { data: requesterBefore, error: requesterError } = await supabase
+
+  const { data: requester, error: requesterError } = await supabase
     .from("tg_users")
-    .select("id, display_name, email, join_request_status, join_request_team_id, team_id, team_role")
+    .select("id, join_request_status, join_request_team_id")
     .eq("id", userId)
     .maybeSingle();
-  
-  if (requesterError) console.error("❌ Requester error:", requesterError);
 
-  if (!requesterBefore || requesterBefore.join_request_status !== "pending") {
+  if (requesterError) throw requesterError;
+  if (!requester || requester.join_request_status !== "pending") {
     throw new Error("No pending request from this user");
   }
-  
-  if (requesterBefore.join_request_team_id !== owner.team_id) {
+  if (requester.join_request_team_id !== owner.team_id) {
     throw new Error("This user requested to join a different team");
   }
-  // Update the user with .select() to get the updated record
-  const { data: updatedData, error: updateError } = await supabase
-    .from("tg_users")
-    .update({
-      team_id: owner.team_id,
-      team_role: "member",
-      join_request_status: null,
-      join_request_team_id: null,
-      join_request_created_at: null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", userId)
-    .select(); // This returns the updated record
 
-  if (updateError) {
-    throw updateError;
-  }
-  // Verify the update worked by fetching the user again
-  const { data: requesterAfter, error: verifyError } = await supabase
-    .from("tg_users")
-    .select("id, display_name, email, join_request_status, join_request_team_id, team_id, team_role")
-    .eq("id", userId)
-    .maybeSingle();
-  if (verifyError) console.error("❌ Verify error:", verifyError);
-  if (!requesterAfter || requesterAfter.team_id !== owner.team_id) {
-    console.error("❌ Verification failed! Team_id not set correctly");
-    throw new Error("Failed to update user - verification failed");
-  }
   const stats = await getTeamStats(owner.team_id);
-  
-  // Determine role - add as member by default
-  let role = 'member';
-  
-  // If main team is full, add as substitute
+
+  let role: "member" | "substitute" = "member";
   if (stats.mainMembers >= 4) {
     if (stats.substitutes >= 2) {
       throw new Error("Team is full (4 main + 2 substitutes). Cannot add more members.");
     }
-    role = 'substitute';
+    role = "substitute";
   }
 
-  // Update the user with the determined role
   const { error } = await supabase
     .from("tg_users")
     .update({
@@ -291,11 +259,8 @@ export async function rejectJoinRequest(userId: string): Promise<void> {
   });
 
   if (error) {
-    console.error("❌ Rejection error:", error);
     throw new Error(error.message);
   }
-
-  console.log("✅ Rejection successful:", data);
 }
 
 export async function recruitByPlayerCode(playerCode: string): Promise<void> {
@@ -348,12 +313,8 @@ export async function recruitByPlayerCode(playerCode: string): Promise<void> {
     .eq("id", target.id);
 
   if (updateError) {
-    console.error("❌ Error updating target user:", updateError);
     throw updateError;
   }
-
-  // Log the invitation for tracking (optional - you could create a notifications table)
-  console.log(`📨 Invitation sent to ${target.email} for team ${team?.name}`);
 }
 
 export async function recruitByEmail(email: string): Promise<void> {
@@ -584,14 +545,7 @@ export async function getMyTeamContext(): Promise<{
     },
   };
 
-   console.log("✅ Final result:", {
-    hasTeam: !!result.team,
-    memberCount: result.members.length,
-    pendingCount: result.pendingRequests.length,
-    myRole: result.myRole,
-  });
-
-  return result
+   return result
 }
 
 export async function transferOwnership(newOwnerId: string): Promise<void> {
@@ -706,11 +660,8 @@ export async function disbandTeam(): Promise<void> {
     .in("id", memberIds);
 
   if (updateError) {
-    console.error("❌ Error updating members:", updateError);
     throw updateError;
   }
-
-  console.log(`✅ Updated ${memberIds.length} members, removed team association`);
 
   // Now delete the team
   const { error: deleteError } = await supabase
@@ -719,11 +670,8 @@ export async function disbandTeam(): Promise<void> {
     .eq("id", teamId);
 
   if (deleteError) {
-    console.error("❌ Error deleting team:", deleteError);
     throw deleteError;
   }
-
-  console.log(`✅ Team ${teamId} deleted successfully`);
 }
 
 
@@ -787,9 +735,10 @@ export async function getPendingInvitations(): Promise<{
     .from("tg_teams")
     .select("id, name, code, owner_id")
     .eq("id", userData.join_request_team_id)
-    .single();
+    .maybeSingle();
 
   if (teamError) throw teamError;
+  if (!team) return [];
 
   // Get owner info (who invited them)
   const { data: owner } = await supabase

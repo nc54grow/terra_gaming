@@ -13,18 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Calendar,
-  IndianRupee,
-  Users,
-  Search,
-  Filter,
-  Trophy,
-  ChevronRight,
-  Grid3x3,
-  List,
-  X,
-} from "lucide-react";
+import { Calendar, IndianRupee, Users, Search, ListFilter as Filter, Trophy, ChevronRight, Grid3x3, List, X } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { listTournaments, type Tournament } from "@/lib/tournament-api";
@@ -217,7 +206,7 @@ function TournamentsContent() {
             )}
           </div>
 
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v ?? "all")}>
             <SelectTrigger className="w-[150px]">
               <Filter className="mr-2 h-4 w-4" />
               <SelectValue placeholder="Status" />
