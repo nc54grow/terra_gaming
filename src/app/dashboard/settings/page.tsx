@@ -8,6 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase-client";
 import { toast } from "sonner";
+import { getMyTeamContext, leaveTeam } from "@/lib/team-api";
 
 export default function SettingsPage() {
   const navigate = useTransitionNavigate();
@@ -19,6 +20,7 @@ export default function SettingsPage() {
     email?: string;
     created_at?: string;
     team_name?: string | null;
+    team_id?: string | null;
     player_id?: string;
     ign?: string;
   } | null;
@@ -29,6 +31,8 @@ export default function SettingsPage() {
     ign: "",
   });
   const [saving, setSaving] = useState(false);
+  const [teamName, setTeamName] = useState<string | null>(null);
+  const [loadingTeam, setLoadingTeam] = useState(true);
 
   // Initialize form with profile data
   useEffect(() => {
@@ -40,6 +44,22 @@ export default function SettingsPage() {
     }
   }, [userProfile]);
 
+  // Fetch team data
+  useEffect(() => {
+    const fetchTeam = async () => {
+      if (!user?.id) return;
+      try {
+        const context = await getMyTeamContext();
+        setTeamName(context.team?.name || null);
+      } catch (error) {
+        console.error("Error fetching team:", error);
+      } finally {
+        setLoadingTeam(false);
+      }
+    };
+    fetchTeam();
+  }, [user?.id]);
+
   const initials =
     (userProfile?.display_name || userProfile?.email || "U")
       .split("@")[0]
@@ -49,7 +69,7 @@ export default function SettingsPage() {
       .map((s) => s[0]?.toUpperCase())
       .join("") || "U";
 
-  // Save profile changes - similar logic to UserDashboard
+  // Save profile changes
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -66,7 +86,6 @@ export default function SettingsPage() {
 
       if (error) throw error;
 
-      // Refresh the profile data in context
       await refreshRole();
       toast.success("Profile updated successfully");
     } catch (error) {
@@ -77,25 +96,21 @@ export default function SettingsPage() {
     }
   }
 
-  // Handle leaving team
+  // Handle leaving team using the team-api function
   const handleLeaveTeam = async () => {
-    // if (!confirm("Are you sure you want to leave your team?")) return;
-    // try {
-    //   const { error } = await supabase
-    //     .from("tg_users")
-    //     .update({
-    //       team_name: null,
-    //       team_id: null, // If you have a team_id field
-    //       updated_at: new Date().toISOString(),
-    //     })
-    //     .eq("id", user!.id);
-    //   if (error) throw error;
-    //   await refreshRole();
-    //   toast.success("You have left the team");
-    // } catch (error) {
-    //   console.error("Error leaving team:", error);
-    //   toast.error("Failed to leave team");
-    // }
+    if (!confirm("Are you sure you want to leave your team?")) return;
+
+    try {
+      await leaveTeam();
+      setTeamName(null);
+      await refreshRole();
+      toast.success("You have left the team");
+      // Optionally refresh the page state
+      window.location.reload();
+    } catch (error: any) {
+      console.error("Error leaving team:", error);
+      toast.error(error.message || "Failed to leave team");
+    }
   };
 
   // Handle logout
@@ -166,16 +181,17 @@ export default function SettingsPage() {
                     Team
                   </label>
 
-                  {userProfile?.team_name ? (
+                  {loadingTeam ? (
+                    <div className="rounded border border-[#3A352D] bg-[#1D1A15] px-4 py-3">
+                      <span className="text-[#8A8175]">Loading...</span>
+                    </div>
+                  ) : teamName ? (
                     <div className="flex items-center justify-between rounded border border-[#3A352D] bg-[#1D1A15] px-4 py-3">
-                      <span className="text-[#F0EBE1]">
-                        {userProfile.team_name}
-                      </span>
-
+                      <span className="text-[#F0EBE1]">{teamName}</span>
                       <button
                         type="button"
                         onClick={handleLeaveTeam}
-                        className="rounded border border-red-500 px-3 py-1 text-xs uppercase text-red-400 hover:bg-red-500 hover:text-white"
+                        className="rounded border border-red-500 px-3 py-1 text-xs uppercase text-red-400 transition-colors hover:bg-red-500 hover:text-white"
                       >
                         Leave Team
                       </button>
@@ -184,7 +200,7 @@ export default function SettingsPage() {
                     <button
                       type="button"
                       onClick={() => navigate("/dashboard/team")}
-                      className="rounded bg-[#C84B1F] px-4 py-3 text-sm font-semibold text-white hover:opacity-90"
+                      className="rounded bg-[#C84B1F] px-4 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90"
                     >
                       Join Team
                     </button>
